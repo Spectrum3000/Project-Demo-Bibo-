@@ -1,0 +1,27 @@
+{
+  "name": "bibo-speaking-practice",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/models/scoring.test.ts"
+  },
+  "dependencies": {
+    "expo": "~58.0.23",
+    "expo-speech": "~58.0.3",
+    "expo-speech-recognition": "58.0.1",
+    "react": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "~5.11.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "~19.3.0",
+    "tsx": "^4.20.0",
+    "typescript": "~6.0.3"
+  }
+}

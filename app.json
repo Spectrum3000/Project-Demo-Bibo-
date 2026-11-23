@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "BIBO",
+    "slug": "bibo-speaking-practice",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow BIBO to use the microphone for speaking practice.",
+          "speechRecognitionPermission": "Allow BIBO to transcribe your speaking practice.",
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
+        }
+      ]
+    ],
+    "android": {
+      "package": "com.bibo.speakingpractice"
+    },
+    "ios": {
+      "bundleIdentifier": "com.bibo.speakingpractice",
+      "supportsTablet": false
+    }
+  }
+}
