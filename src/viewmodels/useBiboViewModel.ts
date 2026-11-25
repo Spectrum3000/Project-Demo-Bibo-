@@ -10,6 +10,7 @@ import {
 import {
   computeVocabularyScore,
   updateDifficulty,
+  type TargetLanguage,
   type VocabularyScore,
 } from '../models/scoring';
 
@@ -214,9 +215,15 @@ export function useBiboViewModel() {
   }
 
   function finishAttempt() {
+    const targetLanguage: TargetLanguage = language === 'en' ? 'english' : 'filipino';
     const result = computeVocabularyScore(
       answerTranscript,
       selectedPrompt.expectedKeywords[language],
+      targetLanguage,
+      {
+        english: [selectedPrompt.passage.en, selectedPrompt.question.en],
+        filipino: [selectedPrompt.passage.fil, selectedPrompt.question.fil],
+      },
     );
     const updatedScores = [...recentScores, result.vocab_score * 100].slice(-3);
     const adaptation = updateDifficulty(difficulty, updatedScores);

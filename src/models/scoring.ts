@@ -1,6 +1,11 @@
 import type { Difficulty } from './prompts';
 
 export type VocabularyBand = 'Pre-A1' | 'A1' | 'A2';
+export type TargetLanguage = 'english' | 'filipino';
+export type TopicWordLists = {
+  english: string[];
+  filipino: string[];
+};
 
 export type VocabularyScore = {
   keyword_score: number;
@@ -18,9 +23,13 @@ function tokenize(text: string): string[] {
     .filter(Boolean);
 }
 
+const fillerWords = new Set(['um', 'uh', 'uhm', 'umm', 'ano', 'kasi']);
+
 export function computeVocabularyScore(
   transcript: string,
   expectedKeywords: string[],
+  targetLanguage: TargetLanguage,
+  topicWordLists: TopicWordLists,
 ): VocabularyScore {
   // Step 1: lowercase and remove punctuation, then match each expected keyword once.
   const transcriptWords = tokenize(transcript);
@@ -43,9 +52,15 @@ export function computeVocabularyScore(
     : matchedKeywords / normalizedKeywords.length;
 
   // Step 2: short responses get a fixed low range score; otherwise use unique/total words.
-  const ttr_score = transcriptWords.length < 3
+  const rawTtr = transcriptWords.length < 3
     ? 0.3
     : new Set(transcriptWords).size / transcriptWords.length;
+  const ttr_score = applyLanguagePurity(
+    rawTtr,
+    transcriptWords,
+    targetLanguage,
+    topicWordLists,
+  );
 
   // Step 3: combine keyword accuracy and vocabulary range into one 0–1 score.
   const vocab_score = (0.6 * keyword_score) + (0.4 * ttr_score);
@@ -58,6 +73,26 @@ export function computeVocabularyScore(
       : 'A2';
 
   return { keyword_score, ttr_score, vocab_score, band };
+}
+
+function applyLanguagePurity(
+  ttr: number,
+  transcriptWords: string[],
+  targetLanguage: TargetLanguage,
+  topicWordLists: TopicWordLists,
+): number {
+  const englishWords = new Set(topicWordLists.english.flatMap(tokenize));
+  const filipinoWords = new Set(topicWordLists.filipino.flatMap(tokenize));
+  const classifiedWords = transcriptWords.filter((word) => {
+    if (fillerWords.has(word)) return false;
+    return englishWords.has(word) || filipinoWords.has(word);
+  });
+  if (classifiedWords.length === 0) return 0;
+
+  const targetWords = targetLanguage === 'english' ? englishWords : filipinoWords;
+  const languagePurity = classifiedWords.filter((word) => targetWords.has(word)).length
+    / classifiedWords.length;
+  return ttr * languagePurity;
 }
 
 export function updateDifficulty(
