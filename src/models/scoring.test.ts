@@ -1,87 +1,66 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  findConnectors,
-  findFillers,
-  proficiencyBand,
-  scoreSpeaking,
+  computeVocabularyScore,
   updateDifficulty,
 } from './scoring';
 
-test('finds repeated English and Filipino hesitation words', () => {
-  assert.deepEqual(findFillers('Umm, uh, ano, kasi, and ummm.'), [
-    'umm',
-    'uh',
-    'ano',
-    'kasi',
-    'ummm',
-  ]);
-  assert.deepEqual(findFillers('Hmm, I think so.'), ['hmm']);
-});
-
-test('scores recognized passage keywords despite punctuation', () => {
-  const result = scoreSpeaking(
-    'Lina plants a tiny seed and gives it water.',
-    'Lina plants tiny seed, gives water.',
-    'I play with my friend because it is fun.',
-    10,
+test('matches normalized keywords and Taglish prefixes', () => {
+  const result = computeVocabularyScore(
+    'Pulang bahay, playing!',
+    ['pula', 'bahay', 'play', 'aso'],
   );
-  assert.equal(result.accuracy, 100);
+
+  assert.equal(result.keyword_score, 0.75);
+  assert.equal(result.ttr_score, 1);
+  assert.equal(result.vocab_score, 0.85);
+  assert.equal(result.band, 'A2');
 });
 
-test('scores mixed-language answers and fuzzy word matches', () => {
-  const mixed = scoreSpeaking(
-    'the dog is running fast',
-    '',
-    'ang dog ay running fast',
-    4,
-  );
-  assert.equal(mixed.accuracy, 100);
-  assert.equal(mixed.overall, 80);
+test('uses the fixed low TTR score for responses shorter than three words', () => {
+  const result = computeVocabularyScore('Pulang bahay!', ['pula', 'bahay', 'aso']);
 
-  const typo = scoreSpeaking(
-    'the dog is running fast',
-    'the dog is running fastr',
-    '',
-    4,
-  );
-  assert.ok(typo.accuracy >= 90);
+  assert.equal(result.keyword_score, 2 / 3);
+  assert.equal(result.ttr_score, 0.3);
+  assert.equal(result.vocab_score, 0.52);
+  assert.equal(result.band, 'A1');
 });
 
-test('counts but and then as connectors, not fillers', () => {
-  const result = scoreSpeaking(
-    'Lina plants a seed.',
-    'Lina plants a seed.',
-    'I played, but then I went home.',
-    4,
-  );
-  assert.equal(result.fillerCount, 0);
-  assert.equal(result.connectorCount, 2);
-  assert.equal(result.coherence, 100);
-  assert.deepEqual(findConnectors('I played, but then I went home.'), ['but', 'then']);
+test('calculates TTR from unique normalized transcript words', () => {
+  const result = computeVocabularyScore('Pula, pula bahay.', ['pula', 'aso']);
+
+  assert.equal(result.keyword_score, 0.5);
+  assert.equal(result.ttr_score, 2 / 3);
+  assert.equal(result.vocab_score, (0.6 * 0.5) + (0.4 * (2 / 3)));
 });
 
-test('hesitation words reduce fluency', () => {
-  const clear = scoreSpeaking('Mia makes pancakes.', 'Mia makes pancakes.', 'I play outside today.', 3);
-  const hesitant = scoreSpeaking(
-    'Mia makes pancakes.',
-    'Mia makes pancakes.',
-    'Um, I play outside today.',
-    4,
-  );
-  assert.ok(hesitant.fluency < clear.fluency);
-  assert.equal(hesitant.fillerCount, 1);
+test('assigns the requested band thresholds', () => {
+  const preA1 = computeVocabularyScore('one one one', ['missing']);
+  const a1 = computeVocabularyScore('one two three', []);
+  const a2 = computeVocabularyScore('pula bahay aso', ['pula', 'missing']);
+
+  assert.equal(preA1.band, 'Pre-A1');
+  assert.equal(a1.vocab_score, 0.4);
+  assert.equal(a1.band, 'A1');
+  assert.equal(a2.vocab_score, 0.7);
+  assert.equal(a2.band, 'A2');
 });
 
-test('uses the PDF A1 score bands', () => {
-  assert.equal(proficiencyBand(39), 0);
-  assert.equal(proficiencyBand(40), 1);
-  assert.equal(proficiencyBand(60), 2);
-  assert.equal(proficiencyBand(80), 3);
+test('scores empty input safely when no expected keywords are provided', () => {
+  const result = computeVocabularyScore('!!!', []);
+
+  assert.deepEqual(result, {
+    keyword_score: 0,
+    ttr_score: 0.3,
+    vocab_score: 0.12,
+    band: 'Pre-A1',
+  });
 });
 
-test('promotes only after three strong exercises and scaffolds below 50%', () => {
+test('adapts across Pre-A1, A1, and A2 without promoting past A2', () => {
+  assert.equal(updateDifficulty(0, [80, 90, 85]).next, 1);
   assert.equal(updateDifficulty(1, [80, 90]).next, 1);
   assert.equal(updateDifficulty(1, [80, 90, 85]).next, 2);
+  assert.equal(updateDifficulty(2, [80, 90, 85]).next, 2);
   assert.equal(updateDifficulty(2, [70, 40, 35]).next, 1);
 });

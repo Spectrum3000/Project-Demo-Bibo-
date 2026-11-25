@@ -15,15 +15,13 @@ Expo starts from `index.ts` and renders `App.tsx`. The source is organized with 
 - `src/models` - app data and model types
 - `src/views` - screens, components, and presentation styles
 - `src/viewmodels` - state and interaction logic
-- `src/prompts.ts` - prompts
-- `src/scoring.ts` - scoring rules
+- `src/models/prompts.ts` - prompts and expected vocabulary keywords
+- `src/models/scoring.ts` - vocabulary scoring and difficulty adaptation
 
 The app supports English (`en-PH`) and Filipino (`fil-PH`) recognition, interim transcripts, replayable spoken prompts, and child-friendly scoring results. The native speech service may require network access or a downloaded language model depending on the device.
 
 ## Scoring and adaptation
 
-The PDF defines Fluency, Accuracy, Range, and Coherence, plus the 60–120 WPM target, score bands, and three-exercise difficulty rules. It does not prescribe criterion weights or a numeric penalty curve. BIBO therefore uses equal 25% criterion weights, a piecewise 60–120 WPM pace score, and the draft's 60/40 pace-to-filler fluency split. Filler density is penalized by `min(100, fillerCount / wordCount * 250)`. Accuracy is word overlap against the read-aloud passage; Range is type-token ratio; Coherence uses connector density.
+Each prompt defines expected keywords in English and Filipino. `computeVocabularyScore` normalizes the learner's answer, matches expected words (including word-form prefixes such as `pula` in `pulang`), and calculates vocabulary range using type-token ratio. Responses shorter than three words receive a fixed TTR score of 0.3. The composite is 60% keyword match and 40% TTR, and maps to Pre-A1 (<0.40), A1 (0.40–<0.70), or A2 (>=0.70).
 
-The composite uses 30% Accuracy, 30% Fluency, 20% Range, and 20% Coherence. Accuracy supports mixed English-Filipino speech and close recognition matches, with a fallback to the answer transcript if the read-aloud transcript is empty.
-
-Scores map to Pre-A1 (0–39), A1-Low (40–59), A1-Mid (60–79), and A1-High (80–100). The app averages the latest three exercise scores, promotes after three consecutive scores of at least 80, and steps down when the rolling average is below 50. These are transparent, rule-based estimates for practice, not a validated language certification.
+Adaptive exercise difficulty uses three levels: 0 = Pre-A1, 1 = A1, and 2 = A2. The app averages the latest three vocabulary scores, promotes after three consecutive scores of at least 80/100, and steps down when the rolling average is below 50/100. These are transparent, rule-based practice estimates, not a validated language certification.

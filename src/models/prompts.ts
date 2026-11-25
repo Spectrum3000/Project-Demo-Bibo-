@@ -1,18 +1,18 @@
 export type Language = 'en' | 'fil';
-export type Difficulty = 0 | 1 | 2 | 3;
+export type Difficulty = 0 | 1 | 2;
 
 export type SpeakingPrompt = {
   id: string;
   difficulty: Difficulty;
   passage: Record<Language, string>;
   question: Record<Language, string>;
+  expectedKeywords: Record<Language, string[]>;
 };
 
 export const difficultyLabels = [
-  { en: 'Pre-A1', fil: 'Bago ang A1' },
-  { en: 'A1 · Low', fil: 'A1 · Panimula' },
-  { en: 'A1 · Mid', fil: 'A1 · Gitna' },
-  { en: 'A1 · High', fil: 'A1 · Hamon' },
+  { en: 'Pre-A1', fil: 'Pre-A1' },
+  { en: 'A1', fil: 'A1' },
+  { en: 'A2', fil: 'A2' },
 ] as const;
 
 export const speakingPrompts: SpeakingPrompt[] = [
@@ -27,6 +27,10 @@ export const speakingPrompts: SpeakingPrompt[] = [
       en: 'What do you like to do after school?',
       fil: 'Ano ang gusto mong gawin pagkatapos ng klase?',
     },
+    expectedKeywords: {
+      en: ['seed', 'plant', 'water', 'leaf'],
+      fil: ['buto', 'itanim', 'dilig', 'dahon'],
+    },
   },
   {
     id: 'kite',
@@ -38,6 +42,10 @@ export const speakingPrompts: SpeakingPrompt[] = [
     question: {
       en: 'What game do you like to play?',
       fil: 'Anong laro ang gusto mong laruin?',
+    },
+    expectedKeywords: {
+      en: ['kite', 'wind', 'park', 'string'],
+      fil: ['saranggola', 'hangin', 'parke', 'pisi'],
     },
   },
   {
@@ -51,6 +59,10 @@ export const speakingPrompts: SpeakingPrompt[] = [
       en: 'What food do you enjoy, and what does it taste like?',
       fil: 'Anong pagkain ang gusto mo, at ano ang lasa nito?',
     },
+    expectedKeywords: {
+      en: ['pancake', 'grandpa', 'mix', 'taste'],
+      fil: ['pancake', 'lolo', 'halo', 'masarap'],
+    },
   },
   {
     id: 'turtle',
@@ -63,10 +75,14 @@ export const speakingPrompts: SpeakingPrompt[] = [
       en: 'Which animal would you like to be for a day, and why?',
       fil: 'Anong hayop ang gusto mong maging sa isang araw, at bakit?',
     },
+    expectedKeywords: {
+      en: ['turtle', 'flower', 'stone', 'pond'],
+      fil: ['pagong', 'bulaklak', 'bato', 'lawa'],
+    },
   },
   {
     id: 'library',
-    difficulty: 2,
+    difficulty: 1,
     passage: {
       en: 'Eli chooses a book about space from the library story corner. He pretends the blue cushions are a rocket, then begins his reading adventure.',
       fil: 'Pumili si Eli ng aklat tungkol sa kalawakan sa sulok-pambasa ng aklatan. Nagkunwari siyang rocket ang mga asul na unan, saka nagsimula sa kanyang pagbabasa.',
@@ -75,10 +91,14 @@ export const speakingPrompts: SpeakingPrompt[] = [
       en: 'Tell me about a story you enjoy. What happens in it?',
       fil: 'Ikuwento ang isang kuwentong gusto mo. Ano ang nangyayari rito?',
     },
+    expectedKeywords: {
+      en: ['book', 'space', 'library', 'rocket'],
+      fil: ['aklat', 'kalawakan', 'aklatan', 'rocket'],
+    },
   },
   {
     id: 'rainy-day',
-    difficulty: 2,
+    difficulty: 1,
     passage: {
       en: 'Dark clouds gather above the playground. Kai brings the soccer ball inside and builds a tall block tower. When the rain stops, the tower is still standing.',
       fil: 'Nagdilim ang mga ulap sa ibabaw ng palaruan. Ipinasok ni Kai ang bola at nagtayo ng mataas na tore mula sa mga bloke. Nang tumila ang ulan, nakatayo pa rin ito.',
@@ -87,10 +107,14 @@ export const speakingPrompts: SpeakingPrompt[] = [
       en: 'What do you do on a rainy day, and who do you spend time with?',
       fil: 'Ano ang ginagawa mo kapag umuulan, at sino ang kasama mo?',
     },
+    expectedKeywords: {
+      en: ['rain', 'playground', 'ball', 'tower'],
+      fil: ['ulan', 'palaruan', 'bola', 'tore'],
+    },
   },
   {
     id: 'garden',
-    difficulty: 3,
+    difficulty: 2,
     passage: {
       en: 'Ruby carries a basket of apples from the garden. One rolls beside a bench, so she picks it up, gives it a shine, and shares it with her little sister.',
       fil: 'Nag-uwi si Ruby ng basket ng mansanas mula sa hardin. Gumulong ang isa sa tabi ng bangko, kaya pinulot niya ito, pinunasan, at ibinahagi sa nakababatang kapatid.',
@@ -99,10 +123,14 @@ export const speakingPrompts: SpeakingPrompt[] = [
       en: 'Tell me about a time you shared something. What happened next?',
       fil: 'Ikuwento ang pagkakataong may ibinahagi ka. Ano ang nangyari pagkatapos?',
     },
+    expectedKeywords: {
+      en: ['apple', 'garden', 'share', 'sister'],
+      fil: ['mansanas', 'hardin', 'bahagi', 'kapatid'],
+    },
   },
   {
     id: 'island',
-    difficulty: 3,
+    difficulty: 2,
     passage: {
       en: 'Ella draws a map to a make-believe island with a candy forest, a tall volcano, and a bridge made of clouds. She gives the map to her cousin for an adventure.',
       fil: 'Gumuhit si Ella ng mapa ng kathang-isip na pulo na may gubat ng kendi, mataas na bulkan, at tulay na ulap. Ibinigay niya ang mapa sa pinsan para sa isang pakikipagsapalaran.',
@@ -110,6 +138,10 @@ export const speakingPrompts: SpeakingPrompt[] = [
     question: {
       en: 'Imagine your own island. What would be there, and what would you do?',
       fil: 'Isipin ang sarili mong pulo. Ano ang makikita roon, at ano ang gagawin mo?',
+    },
+    expectedKeywords: {
+      en: ['island', 'forest', 'volcano', 'cloud'],
+      fil: ['pulo', 'gubat', 'bulkan', 'ulap'],
     },
   },
 ];
