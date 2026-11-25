@@ -14,10 +14,7 @@ import {
   type Language,
   type SpeakingPrompt,
 } from '../models/prompts';
-import {
-  findConnectors,
-  type SpeakingScores,
-} from '../models/scoring';
+import type { VocabularyScore } from '../models/scoring';
 import {
   useBiboViewModel,
   type Part,
@@ -215,7 +212,7 @@ function HomeScreen({
             {english ? ' · Keep going!' : ' · Tuloy lang!'}
           </Text>
           <View style={styles.levelTrack}>
-            <View style={[styles.levelProgress, { width: `${(difficulty + 1) * 25}%` }]} />
+            <View style={[styles.levelProgress, { width: `${((difficulty + 1) / 3) * 100}%` }]} />
           </View>
         </View>
         <Text style={styles.levelStar}>⭐</Text>
@@ -420,7 +417,7 @@ function ResultsScreen({
   onNext,
 }: {
   language: Language;
-  scores: SpeakingScores;
+  scores: VocabularyScore;
   answerTranscript: string;
   passageDuration: number;
   answerDuration: number;
@@ -432,20 +429,19 @@ function ResultsScreen({
   onNext: () => void;
 }) {
   const english = language === 'en';
-  const detectedFillers = [...new Set(scores.fillers)];
-  const detectedConnectors = [...new Set(findConnectors(answerTranscript))];
+  const scorePercent = Math.round(scores.vocab_score * 100);
+  const answerWordCount = answerTranscript.trim()
+    ? answerTranscript.trim().split(/\s+/u).length
+    : 0;
   const criteria = [
-    { key: 'accuracy', icon: '🎯', name: english ? 'Accuracy' : 'Katumpakan', note: english ? 'Read-aloud word match' : 'Pagkakatugma sa binasa' },
-    { key: 'fluency', icon: '🌊', name: english ? 'Fluency' : 'Kahusayan', note: `${scores.wordsPerMinute} ${english ? 'words/min' : 'salita/min'}` },
-    { key: 'range', icon: '✨', name: english ? 'Range' : 'Bokabularyo', note: english ? 'Unique words / total words' : 'Iba-ibang salita / kabuuan' },
-    { key: 'coherence', icon: '🔗', name: english ? 'Coherence' : 'Pagkakaugnay', note: `${scores.connectorCount} ${english ? 'linking words' : 'salitang pang-ugnay'}` },
+    { key: 'keyword_score', icon: '🎯', name: english ? 'Keyword match' : 'Pagtugma ng mga salita', note: english ? 'Expected topic words recognized' : 'Mga inaasahang salitang nakilala' },
+    { key: 'ttr_score', icon: '✨', name: english ? 'Vocabulary range' : 'Lawak ng bokabularyo', note: english ? 'Unique words / total words' : 'Natatanging salita / kabuuang salita' },
   ] as const;
-  const bandDescription = [
-    { en: 'Pre-A1 · Just starting', fil: 'Bago ang A1 · Nagsisimula pa lang' },
-    { en: 'A1-Low · Growing', fil: 'A1-Panimula · Umunlad' },
-    { en: 'A1-Mid · Making progress', fil: 'A1-Gitna · May pag-unlad' },
-    { en: 'A1-High · Ready for a challenge', fil: 'A1-Hamon · Handa sa hamon' },
-  ][scores.band][language];
+  const bandDescription = {
+    'Pre-A1': { en: 'Pre-A1 · Just starting', fil: 'Pre-A1 · Nagsisimula pa lang' },
+    A1: { en: 'A1 · Growing', fil: 'A1 · Umunlad' },
+    A2: { en: 'A2 · Ready for a challenge', fil: 'A2 · Handa sa hamon' },
+  }[scores.band][language];
 
   return (
     <View>
@@ -455,7 +451,7 @@ function ResultsScreen({
       <View style={styles.badgeCard}>
         <Text style={styles.badgeEmoji}>🏆</Text>
         <View style={styles.badgeCopy}>
-          <Text style={styles.promptLabel}>{english ? 'YOUR SPEAKING BAND' : 'ANTAS NG PAGSASALITA'}</Text>
+          <Text style={styles.promptLabel}>{english ? 'YOUR VOCABULARY BAND' : 'ANTAS NG BOKABULARYO'}</Text>
           <Text style={styles.badgeName}>{bandDescription}</Text>
           <Text style={styles.badgeNote}>
             {english ? 'A practice estimate based on this recording.' : 'Tantya lamang mula sa pagsasanay na ito.'}
@@ -464,19 +460,19 @@ function ResultsScreen({
       </View>
 
       <View style={styles.scoreHero}>
-        <Text style={styles.scoreNumber}>{scores.overall}</Text>
+        <Text style={styles.scoreNumber}>{scorePercent}</Text>
         <Text style={styles.scoreCaption}>
-          {english ? 'Speaking score out of 100' : 'Marka sa pagsasalita mula sa 100'}
+          {english ? 'Vocabulary score out of 100' : 'Marka ng bokabularyo mula sa 100'}
         </Text>
-        <Text style={styles.cefrBadge}>{difficultyLabels[scores.band][language]}</Text>
+        <Text style={styles.cefrBadge}>{scores.band}</Text>
         <Text style={styles.starRating}>
-          {'⭐'.repeat(Math.max(1, Math.ceil(scores.overall / 20)))}
+          {'⭐'.repeat(Math.max(1, Math.ceil(scorePercent / 20)))}
         </Text>
       </View>
 
       <SectionHeading
-        title={english ? 'HOW YOUR TALKING IS GROWING' : 'PAG-UNLAD NG PAGSASALITA'}
-        aside={english ? '4 skills' : '4 na kasanayan'}
+        title={english ? 'HOW YOUR VOCABULARY IS GROWING' : 'PAG-UNLAD NG BOKABULARYO'}
+        aside={english ? '2 measures' : '2 sukatan'}
       />
       <View style={styles.criteriaCard}>
         {criteria.map((criterion) => {
@@ -487,10 +483,10 @@ function ResultsScreen({
                 <Text style={styles.criterionName}>
                   {criterion.icon}  {criterion.name}
                 </Text>
-                <Text style={styles.criterionValue}>{value}</Text>
+                <Text style={styles.criterionValue}>{Math.round(value * 100)}</Text>
               </View>
               <View style={styles.criterionTrack}>
-                <View style={[styles.criterionFill, { width: `${value}%` }]} />
+                <View style={[styles.criterionFill, { width: `${value * 100}%` }]} />
               </View>
               <Text style={styles.criterionNote}>{criterion.note}</Text>
             </View>
@@ -514,21 +510,14 @@ function ResultsScreen({
 
       <View style={styles.signalCard}>
         <Text style={styles.signalTitle}>
-          {english ? 'Speech details' : 'Mga detalye ng pagsasalita'}
+          {english ? 'Response details' : 'Mga detalye ng sagot'}
         </Text>
         <Text style={styles.signalText}>
-          {english ? 'Hesitation words scored as fillers: ' : 'Mga salitang pag-aatubili na ibinawas: '}
-          {scores.fillerCount}
-          {detectedFillers.length
-            ? ` (${detectedFillers.join(', ')})`
-            : english ? ' · none detected' : ' · walang nakita'}
+          {english ? 'Words recognized: ' : 'Mga salitang nakilala: '}
+          {answerWordCount}
         </Text>
         <Text style={styles.signalText}>
-          {english ? 'Linking words heard: ' : 'Mga salitang pang-ugnay na narinig: '}
-          {detectedConnectors.length ? detectedConnectors.join(', ') : english ? 'none yet' : 'wala pa'}
-        </Text>
-        <Text style={styles.signalText}>
-          {english ? 'Recording time: ' : 'Tagal ng pag-record: '}
+          {english ? 'Answer recording: ' : 'Pag-record ng sagot: '}
           {formatTime(Math.round(answerDuration))}
           {english ? ' · read-aloud ' : ' · pagbabasa '}
           {formatTime(Math.round(passageDuration))}
@@ -561,7 +550,6 @@ function localizedLevelTitle(level: Difficulty, language: Language): string {
   const titles = [
     { en: 'Word Builder', fil: 'Tagabuo ng Salita' },
     { en: 'Story Starter', fil: 'Panimula ng Kuwento' },
-    { en: 'Story Teller', fil: 'Tagapagkuwento' },
     { en: 'Brave Speaker', fil: 'Matapang na Tagapagsalita' },
   ];
   return titles[level][language];

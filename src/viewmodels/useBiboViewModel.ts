@@ -8,9 +8,9 @@ import {
   type SpeakingPrompt,
 } from '../models/prompts';
 import {
-  scoreSpeaking,
+  computeVocabularyScore,
   updateDifficulty,
-  type SpeakingScores,
+  type VocabularyScore,
 } from '../models/scoring';
 
 type RecognitionResultEvent = {
@@ -57,8 +57,6 @@ try {
   // Expo Go does not include this native module.
 }
 
-const TEST_PHRASE = 'the dog is running fast';
-
 export function useBiboViewModel() {
   const [screen, setScreen] = useState<Screen>('home');
   const [language, setLanguage] = useState<Language>('en');
@@ -77,17 +75,9 @@ export function useBiboViewModel() {
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [message, setMessage] = useState('');
-  const [scores, setScores] = useState<SpeakingScores | null>(null);
+  const [scores, setScores] = useState<VocabularyScore | null>(null);
   const activePart = useRef<Part | null>(null);
   const startedAt = useRef(0);
-
-  function testPrompt(prompt: SpeakingPrompt): SpeakingPrompt {
-    return {
-      ...prompt,
-      passage: { en: TEST_PHRASE, fil: TEST_PHRASE },
-      question: { en: TEST_PHRASE, fil: TEST_PHRASE },
-    };
-  }
 
   useEffect(() => {
     if (!isRecording) return undefined;
@@ -133,7 +123,7 @@ export function useBiboViewModel() {
     Speech.stop();
     setIsSpeaking(false);
     activePart.current = null;
-    setSelectedPrompt(testPrompt(prompt));
+    setSelectedPrompt(prompt);
     setPassageTranscript('');
     setAnswerTranscript('');
     setPassageDuration(0);
@@ -224,13 +214,11 @@ export function useBiboViewModel() {
   }
 
   function finishAttempt() {
-    const result = scoreSpeaking(
-      selectedPrompt.passage[language],
-      passageTranscript,
+    const result = computeVocabularyScore(
       answerTranscript,
-      answerDuration,
+      selectedPrompt.expectedKeywords[language],
     );
-    const updatedScores = [...recentScores, result.overall].slice(-3);
+    const updatedScores = [...recentScores, result.vocab_score * 100].slice(-3);
     const adaptation = updateDifficulty(difficulty, updatedScores);
     setScores(result);
     setRecentScores(updatedScores);
@@ -238,7 +226,7 @@ export function useBiboViewModel() {
     setRollingAverage(adaptation.rollingAverage);
     setDifficulty(adaptation.next);
     setScreen('results');
-    const stars = Math.max(1, Math.ceil(result.overall / 20));
+    const stars = Math.max(1, Math.ceil(result.vocab_score * 100 / 20));
     const feedback = language === 'en'
       ? `Great talking! You earned ${stars} ${stars === 1 ? 'star' : 'stars'}.`
       : `Magaling magsalita! Nakakuha ka ng ${stars} na bituin.`;
