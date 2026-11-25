@@ -14,7 +14,7 @@ import {
   type Language,
   type SpeakingPrompt,
 } from '../models/prompts';
-import type { VocabularyScore } from '../models/scoring';
+import type { InteractionScore, VocabularyScore } from '../models/scoring';
 import {
   useBiboViewModel,
   type Part,
@@ -116,10 +116,11 @@ function BiboApp() {
             />
           )}
 
-          {vm.screen === 'results' && vm.scores && (
+          {vm.screen === 'results' && vm.scores && vm.interactionScore && (
             <ResultsScreen
               language={vm.language}
               scores={vm.scores}
+              interactionScore={vm.interactionScore}
               answerTranscript={vm.answerTranscript}
               passageDuration={vm.passageDuration}
               answerDuration={vm.answerDuration}
@@ -406,6 +407,7 @@ function PracticeScreen({
 function ResultsScreen({
   language,
   scores,
+  interactionScore,
   answerTranscript,
   passageDuration,
   answerDuration,
@@ -418,6 +420,7 @@ function ResultsScreen({
 }: {
   language: Language;
   scores: VocabularyScore;
+  interactionScore: InteractionScore;
   answerTranscript: string;
   passageDuration: number;
   answerDuration: number;
@@ -489,6 +492,55 @@ function ResultsScreen({
                 <View style={[styles.criterionFill, { width: `${value * 100}%` }]} />
               </View>
               <Text style={styles.criterionNote}>{criterion.note}</Text>
+            </View>
+          );
+        })}
+      </View>
+
+      <SectionHeading
+        title={english ? 'HOW YOU INTERACTED' : 'PAANO KA NAKIPAG-UGNAYAN'}
+        aside={english ? 'Interaction' : 'Pakikipag-ugnayan'}
+      />
+      <View style={styles.interactionCard}>
+        <View style={styles.interactionSummary}>
+          <View>
+            <Text style={styles.interactionNumber}>
+              {Math.round(interactionScore.interaction_score * 100)}
+            </Text>
+            <Text style={styles.interactionCaption}>
+              {english ? 'Interaction score out of 100' : 'Marka ng pakikipag-ugnayan mula sa 100'}
+            </Text>
+          </View>
+          <Text style={styles.interactionBand}>{interactionScore.band}</Text>
+        </View>
+        {([
+          {
+            key: 'responsiveness_score',
+            name: english ? 'Responsive turns' : 'Mga tumugong sagot',
+            note: english ? 'Answers with at least two words' : 'Mga sagot na may dalawa o higit pang salita',
+          },
+          {
+            key: 'participation_score',
+            name: english ? 'Participation' : 'Pakikilahok',
+            note: english ? 'Turns with a transcript' : 'Mga sagot na may naitalang salita',
+          },
+          {
+            key: 'relevance_score',
+            name: english ? 'Relevance' : 'Kaugnayan',
+            note: english ? 'Turns matching a prompt keyword' : 'Mga sagot na tumutugma sa salitang-prompt',
+          },
+        ] as const).map((component) => {
+          const value = interactionScore[component.key];
+          return (
+            <View key={component.key} style={styles.interactionComponent}>
+              <View style={styles.criterionTop}>
+                <Text style={styles.criterionName}>{component.name}</Text>
+                <Text style={styles.criterionValue}>{Math.round(value * 100)}</Text>
+              </View>
+              <View style={styles.criterionTrack}>
+                <View style={[styles.criterionFill, { width: `${value * 100}%` }]} />
+              </View>
+              <Text style={styles.criterionNote}>{component.note}</Text>
             </View>
           );
         })}
@@ -1243,6 +1295,44 @@ const styles = StyleSheet.create({
   starRating: {
     marginTop: 7,
     fontSize: 20,
+  },
+  interactionCard: {
+    gap: 13,
+    padding: 14,
+    borderRadius: 20,
+    backgroundColor: colors.white,
+  },
+  interactionSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.track,
+  },
+  interactionNumber: {
+    color: colors.purple,
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '900',
+  },
+  interactionCaption: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  interactionBand: {
+    overflow: 'hidden',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#E2F7EE',
+    color: '#258765',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  interactionComponent: {
+    gap: 5,
   },
   criteriaCard: {
     padding: 14,

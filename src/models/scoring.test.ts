@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  computeInteractionScore,
   computeVocabularyScore,
   updateDifficulty,
 } from './scoring';
@@ -11,6 +12,73 @@ function scoreInEnglish(transcript: string, expectedKeywords: string[]) {
     filipino: [],
   });
 }
+
+test('scores a responsive, relevant interaction answer', () => {
+  const result = computeInteractionScore(
+    ['I like the green leaf!'],
+    ['leaf'],
+    1,
+  );
+
+  assert.deepEqual(result, {
+    responsiveness_score: 1,
+    participation_score: 1,
+    relevance_score: 1,
+    interaction_score: 1,
+    band: 'A2',
+  });
+});
+
+test('counts a non-empty answer under two words as attempted and relevant only', () => {
+  const result = computeInteractionScore(['Leaf!'], ['leaf'], 1);
+
+  assert.equal(result.responsiveness_score, 0);
+  assert.equal(result.participation_score, 1);
+  assert.equal(result.relevance_score, 1);
+  assert.equal(result.interaction_score, 0.6);
+  assert.equal(result.band, 'A1');
+});
+
+test('scores an irrelevant answer and assigns the 0.70 threshold to A2', () => {
+  const result = computeInteractionScore(['I like soccer.'], ['leaf'], 1);
+
+  assert.equal(result.responsiveness_score, 1);
+  assert.equal(result.participation_score, 1);
+  assert.equal(result.relevance_score, 0);
+  assert.equal(result.interaction_score, 0.7);
+  assert.equal(result.band, 'A2');
+});
+
+test('counts a blank or skipped answer in the expected-turn denominator', () => {
+  const result = computeInteractionScore(['  '], ['leaf'], 1);
+
+  assert.equal(result.responsiveness_score, 0);
+  assert.equal(result.participation_score, 0);
+  assert.equal(result.relevance_score, 0);
+  assert.equal(result.interaction_score, 0);
+  assert.equal(result.band, 'Pre-A1');
+});
+
+test('scores multiple turns against the expected-turn denominator and 0.40 threshold', () => {
+  const result = computeInteractionScore(
+    ['leaf', 'leaf', ''],
+    ['leaf'],
+    3,
+  );
+
+  assert.equal(result.responsiveness_score, 0);
+  assert.equal(result.participation_score, 2 / 3);
+  assert.equal(result.relevance_score, 2 / 3);
+  assert.equal(result.interaction_score, 0.4);
+  assert.equal(result.band, 'A1');
+});
+
+test('handles zero expected turns safely', () => {
+  const result = computeInteractionScore(['green leaf'], ['leaf'], 0);
+
+  assert.equal(result.interaction_score, 0);
+  assert.equal(result.band, 'Pre-A1');
+});
 
 test('matches normalized keywords and prefixes', () => {
   const result = scoreInEnglish('Pulang bahay, playing!', ['pula', 'bahay', 'play', 'aso']);

@@ -8,8 +8,10 @@ import {
   type SpeakingPrompt,
 } from '../models/prompts';
 import {
+  computeInteractionScore,
   computeVocabularyScore,
   updateDifficulty,
+  type InteractionScore,
   type TargetLanguage,
   type VocabularyScore,
 } from '../models/scoring';
@@ -77,6 +79,7 @@ export function useBiboViewModel() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [message, setMessage] = useState('');
   const [scores, setScores] = useState<VocabularyScore | null>(null);
+  const [interactionScore, setInteractionScore] = useState<InteractionScore | null>(null);
   const activePart = useRef<Part | null>(null);
   const startedAt = useRef(0);
 
@@ -131,6 +134,7 @@ export function useBiboViewModel() {
     setAnswerDuration(0);
     setElapsedSeconds(0);
     setScores(null);
+    setInteractionScore(null);
     setMessage('');
     setScreen('passage');
   }
@@ -225,9 +229,15 @@ export function useBiboViewModel() {
         filipino: [selectedPrompt.passage.fil, selectedPrompt.question.fil],
       },
     );
+    const interaction = computeInteractionScore(
+      [answerTranscript],
+      selectedPrompt.expectedKeywords[language],
+      1,
+    );
     const updatedScores = [...recentScores, result.vocab_score * 100].slice(-3);
     const adaptation = updateDifficulty(difficulty, updatedScores);
     setScores(result);
+    setInteractionScore(interaction);
     setRecentScores(updatedScores);
     setNextDifficulty(adaptation.next);
     setRollingAverage(adaptation.rollingAverage);
@@ -308,6 +318,7 @@ export function useBiboViewModel() {
     message,
     setMessage,
     scores,
+    interactionScore,
     adaptiveHint,
     localizedDifficulty,
     startExercise,

@@ -14,6 +14,14 @@ export type VocabularyScore = {
   band: VocabularyBand;
 };
 
+export type InteractionScore = {
+  responsiveness_score: number;
+  participation_score: number;
+  relevance_score: number;
+  interaction_score: number;
+  band: VocabularyBand;
+};
+
 function tokenize(text: string): string[] {
   return text
     .toLocaleLowerCase()
@@ -24,6 +32,64 @@ function tokenize(text: string): string[] {
 }
 
 const fillerWords = new Set(['um', 'uh', 'uhm', 'umm', 'ano', 'kasi']);
+
+export function computeInteractionScore(
+  turnTranscripts: string[],
+  expectedKeywords: string[],
+  expectedTurns: number,
+): InteractionScore {
+  const denominator = Number.isFinite(expectedTurns)
+    ? Math.max(0, Math.floor(expectedTurns))
+    : 0;
+  if (denominator === 0) {
+    return {
+      responsiveness_score: 0,
+      participation_score: 0,
+      relevance_score: 0,
+      interaction_score: 0,
+      band: 'Pre-A1',
+    };
+  }
+
+  const normalizedKeywords = Array.from(new Set(
+    expectedKeywords.flatMap((keyword) => tokenize(keyword)),
+  ));
+  let responsiveTurns = 0;
+  let attemptedTurns = 0;
+  let relevantTurns = 0;
+
+  for (let index = 0; index < denominator; index++) {
+    const transcript = turnTranscripts[index] ?? '';
+    if (transcript.trim().length === 0) continue;
+
+    attemptedTurns++;
+    const words = tokenize(transcript);
+    if (words.length >= 2) responsiveTurns++;
+    if (words.some((word) => normalizedKeywords.some((keyword) => word.startsWith(keyword)))) {
+      relevantTurns++;
+    }
+  }
+
+  const responsiveness_score = responsiveTurns / denominator;
+  const participation_score = attemptedTurns / denominator;
+  const relevance_score = relevantTurns / denominator;
+  const interaction_score = (
+    (4 * responsiveTurns) + (3 * attemptedTurns) + (3 * relevantTurns)
+  ) / (10 * denominator);
+  const band: VocabularyBand = interaction_score < 0.4
+    ? 'Pre-A1'
+    : interaction_score < 0.7
+      ? 'A1'
+      : 'A2';
+
+  return {
+    responsiveness_score,
+    participation_score,
+    relevance_score,
+    interaction_score,
+    band,
+  };
+}
 
 export function computeVocabularyScore(
   transcript: string,
