@@ -22,6 +22,13 @@ export type InteractionScore = {
   band: VocabularyBand;
 };
 
+export type ReadAloudMatchScore = {
+  score: number | null;
+  editErrors: number;
+  referenceWords: number;
+  status: 'scored' | 'blank' | 'unavailable' | 'no-reference';
+};
+
 function tokenize(text: string): string[] {
   return text
     .toLocaleLowerCase()
@@ -32,6 +39,59 @@ function tokenize(text: string): string[] {
 }
 
 const fillerWords = new Set(['um', 'uh', 'uhm', 'umm', 'ano', 'kasi']);
+
+export function computeReadAloudMatchScore(
+  transcript: string | null,
+  referenceText: string,
+): ReadAloudMatchScore {
+  const referenceWords = tokenize(referenceText);
+  if (referenceWords.length === 0) {
+    return { score: null, editErrors: 0, referenceWords: 0, status: 'no-reference' };
+  }
+  if (transcript === null) {
+    return {
+      score: null,
+      editErrors: 0,
+      referenceWords: referenceWords.length,
+      status: 'unavailable',
+    };
+  }
+
+  const transcriptWords = tokenize(transcript);
+  if (transcriptWords.length === 0) {
+    return {
+      score: 0,
+      editErrors: referenceWords.length,
+      referenceWords: referenceWords.length,
+      status: 'blank',
+    };
+  }
+
+  let previousRow = Array.from({ length: transcriptWords.length + 1 }, (_, index) => index);
+  for (let referenceIndex = 1; referenceIndex <= referenceWords.length; referenceIndex++) {
+    const currentRow = [referenceIndex];
+    for (let transcriptIndex = 1; transcriptIndex <= transcriptWords.length; transcriptIndex++) {
+      const substitutionCost = referenceWords[referenceIndex - 1]
+        === transcriptWords[transcriptIndex - 1]
+        ? 0
+        : 1;
+      currentRow[transcriptIndex] = Math.min(
+        previousRow[transcriptIndex] + 1,
+        currentRow[transcriptIndex - 1] + 1,
+        previousRow[transcriptIndex - 1] + substitutionCost,
+      );
+    }
+    previousRow = currentRow;
+  }
+
+  const editErrors = previousRow[transcriptWords.length];
+  return {
+    score: Math.max(0, 1 - (editErrors / referenceWords.length)),
+    editErrors,
+    referenceWords: referenceWords.length,
+    status: 'scored',
+  };
+}
 
 export function computeInteractionScore(
   turnTranscripts: string[],

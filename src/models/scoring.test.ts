@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  computeReadAloudMatchScore,
   computeInteractionScore,
   computeVocabularyScore,
   updateDifficulty,
@@ -12,6 +13,48 @@ function scoreInEnglish(transcript: string, expectedKeywords: string[]) {
     filipino: [],
   });
 }
+
+test('scores read-aloud word matches after normalizing case and punctuation', () => {
+  const result = computeReadAloudMatchScore(
+    'lina FINDS a tiny seed!',
+    'Lina finds a tiny seed.',
+  );
+
+  assert.deepEqual(result, {
+    score: 1,
+    editErrors: 0,
+    referenceWords: 5,
+    status: 'scored',
+  });
+});
+
+test('uses word edit distance for omissions and substitutions', () => {
+  const omission = computeReadAloudMatchScore(
+    'Lina finds seed',
+    'Lina finds tiny seed',
+  );
+  const substitution = computeReadAloudMatchScore(
+    'Lina found tiny seed',
+    'Lina finds tiny seed',
+  );
+
+  assert.equal(omission.score, 0.75);
+  assert.equal(omission.editErrors, 1);
+  assert.equal(omission.status, 'scored');
+  assert.equal(substitution.score, 0.75);
+  assert.equal(substitution.editErrors, 1);
+});
+
+test('distinguishes blank, unavailable, and missing reference transcripts', () => {
+  assert.deepEqual(computeReadAloudMatchScore('', 'Say these words.'), {
+    score: 0,
+    editErrors: 3,
+    referenceWords: 3,
+    status: 'blank',
+  });
+  assert.equal(computeReadAloudMatchScore(null, 'Say these words.').status, 'unavailable');
+  assert.equal(computeReadAloudMatchScore('some words', '!!!').status, 'no-reference');
+});
 
 test('scores a responsive, relevant interaction answer', () => {
   const result = computeInteractionScore(

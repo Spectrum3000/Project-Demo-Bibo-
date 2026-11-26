@@ -17,13 +17,26 @@ Expo starts from `index.ts` and renders `App.tsx`. The source is organized with 
 - `src/models` - app data and model types
 - `src/views` - screens, components, and presentation styles
 - `src/viewmodels` - state and interaction logic
-- `src/models/prompts.ts` - prompts and expected vocabulary keywords
-- `src/models/scoring.ts` - vocabulary scoring and difficulty adaptation
+- `src/models/rounds.ts` - Firestore content types, validation, and round summaries
+- `src/services/exercises.ts` - Firestore round loading
+- `src/models/scoring.ts` - read-aloud word matching, vocabulary, interaction, and difficulty adaptation
 
 The app supports English (`en-PH`) and Filipino (`fil-PH`) recognition, interim transcripts, replayable spoken prompts, and child-friendly scoring results. The native speech service may require network access or a downloaded language model depending on the device.
 
+## Firestore round content
+
+The app loads one `roundTemplates` document for the current difficulty. Each template must contain exactly three unique `passageIds` and seven unique `questionIds`. Referenced documents must be active and have the same difficulty as the template.
+
+- `readingPassages/{id}` requires `active_status`, `difficulty` (0, 1, or 2), bilingual `title` (`en`, `fil`), and bilingual `passage` (`en`, `fil`).
+- `openEndedQuestions/{id}` requires `active_status`, `difficulty`, and a bilingual `prompt`. Optional `hints`, `answerKeywords`, and `relevanceKeywords` must also use `en` and `fil`.
+- `roundTemplates/{id}` requires `difficulty`, `passageIds`, and `questionIds`.
+
+The round preserves the template's IDs and order in memory. The app does not write attempts to Firestore because Firebase Authentication is not configured here. Public content reads still require suitable Firestore read rules and Firebase environment configuration.
+
 ## Scoring and adaptation
 
-Each prompt defines expected keywords in English and Filipino. `computeVocabularyScore` normalizes the learner's answer, matches expected words (including word-form prefixes such as `pula` in `pulang`), and calculates vocabulary range using type-token ratio. The selected exercise language applies a purity multiplier using the corresponding bilingual prompt text as a topic word list; fillers and words outside both lists are excluded from the purity denominator, so words recognized as belonging only to the other language reduce range. Responses shorter than three words receive a base TTR score of 0.3 before purity is applied. The composite is 60% keyword match and 40% TTR, and maps to Pre-A1 (<0.40), A1 (0.40–<0.70), or A2 (>=0.70).
+Read-aloud items are compared with the full reference passage using normalized word edit distance. This is an ASR word-matching proxy, not a pronunciation score; blank readings score zero, while unavailable recognition and missing references are reported separately.
 
-Adaptive exercise difficulty uses three levels: 0 = Pre-A1, 1 = A1, and 2 = A2. The app averages the latest three vocabulary scores, promotes after three consecutive scores of at least 80/100, and steps down when the rolling average is below 50/100. These are transparent, rule-based practice estimates, not a validated language certification.
+For open-ended questions, `answerKeywords` provide vocabulary-scoring targets and `relevanceKeywords` provide relevance cues; they are not the only acceptable answers. A score is shown only when the corresponding guidance is present. Vocabulary scoring normalizes text, matches keyword prefixes, and combines keyword match (60%) with vocabulary range (40%); scores map to Pre-A1 (<0.40), A1 (0.40–<0.70), or A2 (>=0.70).
+
+Vocabulary and interaction averages are shown separately from read-aloud matching. Difficulty changes only after the round completes and currently uses vocabulary averages: it promotes after three consecutive round averages of at least 80/100 and steps down when the rolling average is below 50/100. These are practice estimates, not validated language or pronunciation assessments.

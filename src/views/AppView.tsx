@@ -12,9 +12,8 @@ import {
   difficultyLabels,
   type Difficulty,
   type Language,
-  type SpeakingPrompt,
 } from '../models/prompts';
-import type { InteractionScore, VocabularyScore } from '../models/scoring';
+import type { RoundSummary } from '../models/rounds';
 import {
   useBiboViewModel,
   type Part,
@@ -70,66 +69,46 @@ function BiboApp() {
               language={vm.language}
               difficulty={vm.difficulty}
               message={vm.message}
-              onStart={vm.startExercise}
+              isLoading={vm.isLoadingRound}
+              onStart={vm.startRound}
             />
           )}
 
-          {vm.screen === 'passage' && (
+          {(vm.screen === 'passage' || vm.screen === 'question')
+            && vm.currentPart && vm.currentItem && (
             <PracticeScreen
-              part="passage"
+              part={vm.currentPart}
               language={vm.language}
-              prompt={vm.selectedPrompt}
-              transcript={vm.passageTranscript}
-              elapsedSeconds={vm.elapsedSeconds}
+              promptText={vm.currentPrompt}
+              transcript={vm.currentTranscript}
+              elapsedSeconds={vm.currentDuration}
+              stepNumber={vm.itemIndex + 1}
+              totalSteps={vm.round?.items.length ?? 10}
+              isLastStep={vm.itemIndex + 1 === (vm.round?.items.length ?? 10)}
+              recognitionUnavailable={vm.recognitionUnavailable}
               isRecording={vm.isRecording}
+              isRecognitionStopping={vm.isRecognitionStopping}
               isSpeaking={vm.isSpeaking}
               message={vm.message}
               onBack={vm.goHome}
-              onToggleRecording={() => vm.toggleRecording('passage')}
-              onPlay={() => vm.playText(vm.selectedPrompt.passage[vm.language])}
-              onNext={() => {
-                if (vm.isRecording) vm.toggleRecording('passage');
-                vm.setMessage('');
-                vm.setScreen('question');
+              onToggleRecording={() => {
+                if (vm.currentPart) vm.toggleRecording(vm.currentPart);
               }}
+              onPlay={() => vm.playText(vm.currentPrompt)}
+              onNext={vm.finishCurrentItem}
             />
           )}
 
-          {vm.screen === 'question' && (
-            <PracticeScreen
-              part="question"
-              language={vm.language}
-              prompt={vm.selectedPrompt}
-              transcript={vm.answerTranscript}
-              elapsedSeconds={vm.elapsedSeconds}
-              isRecording={vm.isRecording}
-              isSpeaking={vm.isSpeaking}
-              message={vm.message}
-              onBack={vm.goHome}
-              onToggleRecording={() => vm.toggleRecording('question')}
-              onPlay={() => vm.playText(vm.selectedPrompt.question[vm.language])}
-              onNext={() => {
-                if (vm.isRecording) vm.toggleRecording('question');
-                vm.setMessage('');
-                vm.finishAttempt();
-              }}
-            />
-          )}
-
-          {vm.screen === 'results' && vm.scores && vm.interactionScore && (
+          {vm.screen === 'results' && vm.roundSummary && (
             <ResultsScreen
               language={vm.language}
-              scores={vm.scores}
-              interactionScore={vm.interactionScore}
-              answerTranscript={vm.answerTranscript}
-              passageDuration={vm.passageDuration}
-              answerDuration={vm.answerDuration}
+              summary={vm.roundSummary}
               rollingAverage={vm.rollingAverage}
               nextDifficulty={vm.nextDifficulty}
               adaptiveHint={vm.adaptiveHint}
               difficultyLabel={vm.localizedDifficulty}
-              onPlayAnswer={() => vm.playText(vm.answerTranscript)}
-              onNext={vm.startExercise}
+              onPlayAnswer={vm.playText}
+              onNext={vm.startRound}
             />
           )}
         </ScrollView>
@@ -146,11 +125,8 @@ function BiboApp() {
             label={vm.language === 'en' ? 'Play' : 'Laro'}
             active={vm.screen === 'passage' || vm.screen === 'question'}
             onPress={() => {
-              if (vm.screen === 'home' || vm.screen === 'results') vm.startExercise();
-              else {
-                if (vm.isRecording) vm.toggleRecording('passage');
-                vm.setScreen('passage');
-              }
+              if (vm.screen === 'home' || vm.screen === 'results') void vm.startRound();
+              else vm.resumeCurrentItem();
             }}
           />
           <NavButton
@@ -158,7 +134,7 @@ function BiboApp() {
             label={vm.language === 'en' ? 'Progress' : 'Usad'}
             active={vm.screen === 'results'}
             onPress={() => {
-              if (vm.scores) vm.setScreen('results');
+              if (vm.roundSummary) vm.setScreen('results');
               else vm.setMessage(
                 vm.language === 'en'
                   ? 'Finish a speaking quest to see your progress.'
@@ -176,11 +152,13 @@ function HomeScreen({
   language,
   difficulty,
   message,
+  isLoading,
   onStart,
 }: {
   language: Language;
   difficulty: Difficulty;
   message: string;
+  isLoading: boolean;
   onStart: () => void;
 }) {
   const english = language === 'en';
@@ -225,16 +203,19 @@ function HomeScreen({
       />
       <Pressable
         accessibilityRole="button"
+        disabled={isLoading}
         onPress={onStart}
-        style={({ pressed }) => [styles.questCard, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.questCard, (pressed || isLoading) && styles.pressed]}
       >
         <Text style={styles.questIcon}>🎙️</Text>
         <View style={styles.questCopy}>
           <Text style={styles.questTitle}>
-            {english ? 'Tell me about your day!' : 'Ikuwento ang araw mo!'}
+            {isLoading
+              ? english ? 'Loading your round…' : 'Inihahanda ang round…'
+              : english ? 'Start your speaking round!' : 'Simulan ang round mo!'}
           </Text>
           <Text style={styles.questSubtitle}>
-            {english ? 'Speak for a minute' : 'Magsalita nang isang minuto'}
+            {english ? '3 readings + 7 questions' : '3 babasahin + 7 tanong'}
           </Text>
         </View>
         <Text style={styles.questArrow}>›</Text>
@@ -265,10 +246,15 @@ function HomeScreen({
 function PracticeScreen({
   part,
   language,
-  prompt,
+  promptText,
   transcript,
   elapsedSeconds,
+  stepNumber,
+  totalSteps,
+  isLastStep,
+  recognitionUnavailable,
   isRecording,
+  isRecognitionStopping,
   isSpeaking,
   message,
   onBack,
@@ -278,10 +264,15 @@ function PracticeScreen({
 }: {
   part: Part;
   language: Language;
-  prompt: SpeakingPrompt;
+  promptText: string;
   transcript: string;
   elapsedSeconds: number;
+  stepNumber: number;
+  totalSteps: number;
+  isLastStep: boolean;
+  recognitionUnavailable: boolean;
   isRecording: boolean;
+  isRecognitionStopping: boolean;
   isSpeaking: boolean;
   message: string;
   onBack: () => void;
@@ -291,8 +282,7 @@ function PracticeScreen({
 }) {
   const english = language === 'en';
   const passagePart = part === 'passage';
-  const promptText = passagePart ? prompt.passage[language] : prompt.question[language];
-  const canContinue = transcript.trim().length > 0 && !isRecording;
+  const canContinue = !isRecording && !isRecognitionStopping;
   return (
     <View>
       <View style={styles.screenHeading}>
@@ -306,33 +296,37 @@ function PracticeScreen({
         </Pressable>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrowSmall}>
-            {english ? 'SPEAKING EXERCISE' : 'PAGSASANAY SA PAGSASALITA'}
+            {english ? 'SPEAKING ROUND' : 'ROUND NG PAGSASALITA'}
           </Text>
           <Text style={styles.screenTitle}>
             {passagePart
-              ? english ? 'Tell your story' : 'Ikuwento ang sa iyo'
-              : english ? 'Your answer' : 'Ikaw naman'}
+              ? english ? 'Read aloud' : 'Basahin nang malakas'
+              : english ? 'Open-ended question' : 'Bukas na tanong'}
           </Text>
         </View>
-        <Text style={styles.stepCount}>{passagePart ? '1/2' : '2/2'}</Text>
+        <Text style={styles.stepCount}>{`${stepNumber}/${totalSteps}`}</Text>
       </View>
 
       <View style={styles.progressTrack}>
-        <View style={styles.progressDone} />
-        <View style={[styles.progressDone, !passagePart && styles.progressActive]} />
-        <View style={styles.progressEmpty} />
-        <View style={styles.progressEmpty} />
-        <View style={styles.progressEmpty} />
-        <View style={styles.progressEmpty} />
+        {Array.from({ length: totalSteps }, (_, index) => (
+          <View
+            key={index}
+            style={[
+              styles.progressDone,
+              index === stepNumber - 1 && styles.progressActive,
+              index >= stepNumber && styles.progressEmpty,
+            ]}
+          />
+        ))}
       </View>
 
       <View style={styles.promptCard}>
-        <Text style={styles.promptAvatar}>{passagePart ? '🦜' : '💬'}</Text>
+        <Text style={styles.promptAvatar}>{passagePart ? '📖' : '💬'}</Text>
         <View style={styles.promptContent}>
           <Text style={styles.promptLabel}>
             {passagePart
               ? english ? 'READ ALOUD' : 'BASAHIN NANG MALAKAS'
-              : english ? 'YOUR TURN' : 'IKAW NAMAN'}
+              : english ? 'OPEN-ENDED QUESTION' : 'BUKAS NA TANONG'}
           </Text>
           <Text style={styles.promptText}>{promptText}</Text>
           <Pressable onPress={onPlay} style={styles.playButton}>
@@ -349,19 +343,26 @@ function PracticeScreen({
         <View style={styles.recordOrbit}>
           <Pressable
             accessibilityRole="button"
+            disabled={isRecognitionStopping}
             accessibilityLabel={
               isRecording
                 ? english ? 'Stop recording' : 'Ihinto ang pag-record'
                 : english ? 'Start recording' : 'Simulan ang pag-record'
             }
             onPress={onToggleRecording}
-            style={[styles.recordButton, isRecording && styles.recordingButton]}
+            style={[
+              styles.recordButton,
+              isRecording && styles.recordingButton,
+              isRecognitionStopping && styles.recordButtonDisabled,
+            ]}
           >
             <View style={[styles.recordDot, isRecording && styles.recordStop]} />
           </Pressable>
         </View>
         <Text style={styles.recordInstruction}>
-          {isRecording
+          {isRecognitionStopping
+            ? english ? 'Finishing recognition…' : 'Tinatapos ang pagkilala…'
+            : isRecording
             ? english ? 'Listening… tap when you are done' : 'Nakikinig… tapikin kapag tapos na'
             : english ? 'Tap to talk!' : 'Tapikin para magsalita!'}
         </Text>
@@ -382,20 +383,31 @@ function PracticeScreen({
       <Text style={styles.hint}>
         {passagePart
           ? english
-            ? 'Read the whole passage aloud, then stop recording.'
-            : 'Basahin nang malakas ang talata, saka ihinto ang pag-record.'
+            ? 'Read the passage aloud. The result checks ASR word matching, not pronunciation.'
+            : 'Basahin nang malakas ang talata. Pagtutugma ng ASR ang sinusukat, hindi bigkas.'
           : english
-            ? 'Speak for about 30–60 seconds. There is no wrong answer.'
-            : 'Magsalita nang mga 30–60 segundo. Walang maling sagot.'}
+            ? 'Answer in your own words. There is no single required answer.'
+            : 'Sumagot gamit ang sarili mong mga salita. Walang iisang tamang sagot.'}
       </Text>
+      {recognitionUnavailable && (
+        <Text style={styles.hint}>
+          {english
+            ? 'Speech recognition is unavailable. This read-aloud score will be marked unavailable.'
+            : 'Hindi available ang speech recognition. Mamarkahang hindi available ang puntos sa pagbasa.'}
+        </Text>
+      )}
       {!!message && <Text style={styles.errorMessage}>{message}</Text>}
 
       <View style={styles.nextRow}>
         <View />
         <PrimaryButton
-          title={passagePart
-            ? english ? 'Next  →' : 'Sunod  →'
-            : english ? 'See results  →' : 'Tingnan ang resulta  →'}
+          title={isRecognitionStopping
+            ? english ? 'Finishing…' : 'Tinatapos…'
+            : !transcript.trim()
+            ? english ? 'Skip item  →' : 'Laktawan  →'
+            : isLastStep
+              ? english ? 'Finish round  →' : 'Tapusin ang round  →'
+              : english ? 'Next item  →' : 'Susunod  →'}
           disabled={!canContinue}
           onPress={onNext}
         />
@@ -406,11 +418,7 @@ function PracticeScreen({
 
 function ResultsScreen({
   language,
-  scores,
-  interactionScore,
-  answerTranscript,
-  passageDuration,
-  answerDuration,
+  summary,
   rollingAverage,
   nextDifficulty,
   adaptiveHint,
@@ -419,160 +427,244 @@ function ResultsScreen({
   onNext,
 }: {
   language: Language;
-  scores: VocabularyScore;
-  interactionScore: InteractionScore;
-  answerTranscript: string;
-  passageDuration: number;
-  answerDuration: number;
+  summary: RoundSummary;
   rollingAverage: number;
   nextDifficulty: Difficulty;
   adaptiveHint: string;
   difficultyLabel: (level: Difficulty) => string;
-  onPlayAnswer: () => void;
+  onPlayAnswer: (text: string) => void;
   onNext: () => void;
 }) {
   const english = language === 'en';
-  const scorePercent = Math.round(scores.vocab_score * 100);
-  const answerWordCount = answerTranscript.trim()
-    ? answerTranscript.trim().split(/\s+/u).length
-    : 0;
+  const scores = summary.vocabularyAverage;
+  const interactionScore = summary.interactionAverage;
+  const passageResults = summary.items.filter((item) => item.kind === 'readingPassage');
+  const questionResults = summary.items.filter((item) => item.kind === 'openEndedQuestion');
+  const assessedPassageCount = passageResults.filter(
+    (item) => typeof item.readAloudMatch?.score === 'number',
+  ).length;
+  const readingDuration = passageResults.reduce((sum, item) => sum + item.durationSeconds, 0);
+  const answerDuration = questionResults.reduce((sum, item) => sum + item.durationSeconds, 0);
   const criteria = [
     { key: 'keyword_score', icon: '🎯', name: english ? 'Keyword match' : 'Pagtugma ng mga salita', note: english ? 'Expected topic words recognized' : 'Mga inaasahang salitang nakilala' },
     { key: 'ttr_score', icon: '✨', name: english ? 'Vocabulary range' : 'Lawak ng bokabularyo', note: english ? 'Unique words / total words' : 'Natatanging salita / kabuuang salita' },
   ] as const;
-  const bandDescription = {
-    'Pre-A1': { en: 'Pre-A1 · Just starting', fil: 'Pre-A1 · Nagsisimula pa lang' },
-    A1: { en: 'A1 · Growing', fil: 'A1 · Umunlad' },
-    A2: { en: 'A2 · Ready for a challenge', fil: 'A2 · Handa sa hamon' },
-  }[scores.band][language];
+  const bandDescription = scores
+    ? {
+        'Pre-A1': { en: 'Pre-A1 · Just starting', fil: 'Pre-A1 · Nagsisimula pa lang' },
+        A1: { en: 'A1 · Growing', fil: 'A1 · Umunlad' },
+        A2: { en: 'A2 · Ready for a challenge', fil: 'A2 · Handa sa hamon' },
+      }[scores.band][language]
+    : english ? 'Not scored · No answer keywords configured' : 'Walang puntos · Walang gabay na salita';
 
   return (
     <View>
-      <Text style={styles.eyebrow}>{english ? 'YOUR ADVENTURE 🗺️' : 'ANG IYONG PAGLALAKBAY 🗺️'}</Text>
+      <Text style={styles.eyebrow}>
+        {english ? `ROUND ${summary.roundNumber} COMPLETE 🗺️` : `TAPOS NA ANG ROUND ${summary.roundNumber} 🗺️`}
+      </Text>
       <Text style={styles.resultsTitle}>{english ? 'Keep growing!' : 'Patuloy na umunlad!'}</Text>
 
       <View style={styles.badgeCard}>
         <Text style={styles.badgeEmoji}>🏆</Text>
         <View style={styles.badgeCopy}>
-          <Text style={styles.promptLabel}>{english ? 'YOUR VOCABULARY BAND' : 'ANTAS NG BOKABULARYO'}</Text>
+          <Text style={styles.promptLabel}>
+            {english ? 'ROUND VOCABULARY BAND' : 'ANTAS NG BOKABULARYO SA ROUND'}
+          </Text>
           <Text style={styles.badgeName}>{bandDescription}</Text>
           <Text style={styles.badgeNote}>
-            {english ? 'A practice estimate based on this recording.' : 'Tantya lamang mula sa pagsasanay na ito.'}
+            {english
+              ? 'A practice estimate from this round’s question answers.'
+              : 'Tantya lamang mula sa mga sagot sa round na ito.'}
           </Text>
         </View>
       </View>
 
       <View style={styles.scoreHero}>
-        <Text style={styles.scoreNumber}>{scorePercent}</Text>
-        <Text style={styles.scoreCaption}>
-          {english ? 'Vocabulary score out of 100' : 'Marka ng bokabularyo mula sa 100'}
+        {!scores
+          ? (
+            <Text style={styles.scoreCaption}>
+              {english
+                ? 'Vocabulary score unavailable until answerKeywords are configured.'
+                : 'Hindi available ang marka hangga’t walang answerKeywords.'}
+            </Text>
+          )
+          : (
+            <>
+              <Text style={styles.scoreNumber}>{Math.round(scores.vocab_score * 100)}</Text>
+              <Text style={styles.scoreCaption}>
+                {english ? 'Vocabulary average out of 100' : 'Karaniwang marka ng bokabularyo mula sa 100'}
+              </Text>
+              <Text style={styles.cefrBadge}>{scores.band}</Text>
+              <Text style={styles.starRating}>
+                {'⭐'.repeat(Math.max(1, Math.ceil(scores.vocab_score * 100 / 20)))}
+              </Text>
+            </>
+          )}
+      </View>
+
+      <SectionHeading
+        title={english ? 'READ-ALOUD WORD MATCH' : 'PAGTUTUGMA NG BINASA'}
+        aside={`${assessedPassageCount}/${passageResults.length} ${english ? 'assessed' : 'nasuri'}`}
+      />
+      <View style={styles.criteriaCard}>
+        <Text style={styles.criterionNote}>
+          {english
+            ? 'This checks transcript match with the passage, not pronunciation.'
+            : 'Tinutugma nito ang transcript sa talata, hindi nito sinusukat ang bigkas.'}
         </Text>
-        <Text style={styles.cefrBadge}>{scores.band}</Text>
-        <Text style={styles.starRating}>
-          {'⭐'.repeat(Math.max(1, Math.ceil(scorePercent / 20)))}
+        <Text style={styles.readAloudAverage}>
+          {summary.readAloudAverage === null
+            ? english ? 'Unavailable' : 'Hindi available'
+            : `${Math.round(summary.readAloudAverage * 100)}/100`}
         </Text>
+        {passageResults.map((item) => {
+          const score = item.readAloudMatch;
+          return (
+            <View key={item.id} style={styles.roundResultItem}>
+              <Text style={styles.criterionName}>{item.label[language]}</Text>
+              <Text style={styles.criterionNote}>
+                {!score || score.status === 'unavailable'
+                  ? english ? 'Recognition unavailable' : 'Hindi available ang pagkilala'
+                  : score?.status === 'no-reference'
+                    ? english ? 'Reference text unavailable' : 'Hindi available ang tekstong sanggunian'
+                    : score?.status === 'blank'
+                      ? english ? 'No words recognized · 0/100' : 'Walang salitang nakilala · 0/100'
+                      : `${Math.round((score?.score ?? 0) * 100)}/100`}
+              </Text>
+            </View>
+          );
+        })}
       </View>
 
       <SectionHeading
         title={english ? 'HOW YOUR VOCABULARY IS GROWING' : 'PAG-UNLAD NG BOKABULARYO'}
-        aside={english ? '2 measures' : '2 sukatan'}
+        aside={`${summary.scoredVocabularyQuestionCount}/${questionResults.length} ${english ? 'scored' : 'may puntos'}`}
       />
       <View style={styles.criteriaCard}>
-        {criteria.map((criterion) => {
-          const value = scores[criterion.key];
-          return (
-            <View key={criterion.key} style={styles.criterion}>
-              <View style={styles.criterionTop}>
-                <Text style={styles.criterionName}>
-                  {criterion.icon}  {criterion.name}
-                </Text>
-                <Text style={styles.criterionValue}>{Math.round(value * 100)}</Text>
-              </View>
-              <View style={styles.criterionTrack}>
-                <View style={[styles.criterionFill, { width: `${value * 100}%` }]} />
-              </View>
-              <Text style={styles.criterionNote}>{criterion.note}</Text>
-            </View>
-          );
-        })}
+        {scores
+          ? criteria.map((criterion) => {
+              const value = scores[criterion.key];
+              return (
+                <View key={criterion.key} style={styles.criterion}>
+                  <View style={styles.criterionTop}>
+                    <Text style={styles.criterionName}>
+                      {criterion.icon}  {criterion.name}
+                    </Text>
+                    <Text style={styles.criterionValue}>{Math.round(value * 100)}</Text>
+                  </View>
+                  <View style={styles.criterionTrack}>
+                    <View style={[styles.criterionFill, { width: `${value * 100}%` }]} />
+                  </View>
+                  <Text style={styles.criterionNote}>{criterion.note}</Text>
+                </View>
+              );
+            })
+          : (
+            <Text style={styles.criterionNote}>
+              {english
+                ? 'Add answerKeywords to question documents to score vocabulary.'
+                : 'Magdagdag ng answerKeywords sa mga tanong para mamarkahan ang bokabularyo.'}
+            </Text>
+          )}
       </View>
 
       <SectionHeading
         title={english ? 'HOW YOU INTERACTED' : 'PAANO KA NAKIPAG-UGNAYAN'}
-        aside={english ? 'Interaction' : 'Pakikipag-ugnayan'}
+        aside={`${summary.scoredInteractionQuestionCount}/${questionResults.length} ${english ? 'scored' : 'may puntos'}`}
       />
-      <View style={styles.interactionCard}>
-        <View style={styles.interactionSummary}>
-          <View>
-            <Text style={styles.interactionNumber}>
-              {Math.round(interactionScore.interaction_score * 100)}
-            </Text>
-            <Text style={styles.interactionCaption}>
-              {english ? 'Interaction score out of 100' : 'Marka ng pakikipag-ugnayan mula sa 100'}
+      {interactionScore
+        ? (
+          <View style={styles.interactionCard}>
+            <View style={styles.interactionSummary}>
+              <View>
+                <Text style={styles.interactionNumber}>
+                  {Math.round(interactionScore.interaction_score * 100)}
+                </Text>
+                <Text style={styles.interactionCaption}>
+                  {english ? 'Interaction average out of 100' : 'Karaniwang marka ng pakikipag-ugnayan mula sa 100'}
+                </Text>
+              </View>
+              <Text style={styles.interactionBand}>{interactionScore.band}</Text>
+            </View>
+            {([
+              {
+                key: 'responsiveness_score',
+                name: english ? 'Responsive turns' : 'Mga tumugong sagot',
+                note: english ? 'Answers with at least two words' : 'Mga sagot na may dalawa o higit pang salita',
+              },
+              {
+                key: 'participation_score',
+                name: english ? 'Participation' : 'Pakikilahok',
+                note: english ? 'Turns with a transcript' : 'Mga sagot na may naitalang salita',
+              },
+              {
+                key: 'relevance_score',
+                name: english ? 'Relevance' : 'Kaugnayan',
+                note: english ? 'Turns matching relevance keywords' : 'Mga sagot na tumutugma sa mga salitang may kaugnayan',
+              },
+            ] as const).map((component) => {
+              const value = interactionScore[component.key];
+              return (
+                <View key={component.key} style={styles.interactionComponent}>
+                  <View style={styles.criterionTop}>
+                    <Text style={styles.criterionName}>{component.name}</Text>
+                    <Text style={styles.criterionValue}>{Math.round(value * 100)}</Text>
+                  </View>
+                  <View style={styles.criterionTrack}>
+                    <View style={[styles.criterionFill, { width: `${value * 100}%` }]} />
+                  </View>
+                  <Text style={styles.criterionNote}>{component.note}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )
+        : (
+          <View style={styles.criteriaCard}>
+            <Text style={styles.criterionNote}>
+              {english
+                ? 'Interaction relevance is unavailable until relevanceKeywords are configured.'
+                : 'Hindi available ang kaugnayan hangga’t walang relevanceKeywords.'}
             </Text>
           </View>
-          <Text style={styles.interactionBand}>{interactionScore.band}</Text>
-        </View>
-        {([
-          {
-            key: 'responsiveness_score',
-            name: english ? 'Responsive turns' : 'Mga tumugong sagot',
-            note: english ? 'Answers with at least two words' : 'Mga sagot na may dalawa o higit pang salita',
-          },
-          {
-            key: 'participation_score',
-            name: english ? 'Participation' : 'Pakikilahok',
-            note: english ? 'Turns with a transcript' : 'Mga sagot na may naitalang salita',
-          },
-          {
-            key: 'relevance_score',
-            name: english ? 'Relevance' : 'Kaugnayan',
-            note: english ? 'Turns matching a prompt keyword' : 'Mga sagot na tumutugma sa salitang-prompt',
-          },
-        ] as const).map((component) => {
-          const value = interactionScore[component.key];
-          return (
-            <View key={component.key} style={styles.interactionComponent}>
-              <View style={styles.criterionTop}>
-                <Text style={styles.criterionName}>{component.name}</Text>
-                <Text style={styles.criterionValue}>{Math.round(value * 100)}</Text>
-              </View>
-              <View style={styles.criterionTrack}>
-                <View style={[styles.criterionFill, { width: `${value * 100}%` }]} />
-              </View>
-              <Text style={styles.criterionNote}>{component.note}</Text>
-            </View>
-          );
-        })}
-      </View>
-
-      <View style={styles.answerQuote}>
-        <Text style={styles.transcriptLabel}>{english ? 'YOUR ANSWER' : 'ANG IYONG SAGOT'}</Text>
-        <Text style={styles.answerText}>
-          {answerTranscript || (english ? 'No words were recognized.' : 'Walang salitang nakilala.')}
-        </Text>
-        {!!answerTranscript && (
-          <Pressable onPress={onPlayAnswer} style={styles.listenAgain}>
-            <Text style={styles.listenAgainText}>
-              {english ? '🔊 Listen to your answer' : '🔊 Pakinggan ang sagot'}
-            </Text>
-          </Pressable>
         )}
-      </View>
+
+      <SectionHeading
+        title={english ? 'YOUR QUESTION ANSWERS' : 'MGA SAGOT MO'}
+        aside={english ? `${questionResults.length} answers` : `${questionResults.length} sagot`}
+      />
+      {questionResults.map((item) => (
+        <View key={item.id} style={styles.answerQuote}>
+          <Text style={styles.transcriptLabel}>{item.label[language]}</Text>
+          <Text style={styles.answerText}>
+            {item.transcript || (english ? 'No words were recognized.' : 'Walang salitang nakilala.')}
+          </Text>
+          {!!item.transcript && (
+            <Pressable
+              onPress={() => onPlayAnswer(item.transcript)}
+              style={styles.listenAgain}
+            >
+              <Text style={styles.listenAgainText}>
+                {english ? '🔊 Listen again' : '🔊 Pakinggan muli'}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      ))}
 
       <View style={styles.signalCard}>
         <Text style={styles.signalTitle}>
-          {english ? 'Response details' : 'Mga detalye ng sagot'}
+          {english ? 'Round details' : 'Mga detalye ng round'}
         </Text>
         <Text style={styles.signalText}>
-          {english ? 'Words recognized: ' : 'Mga salitang nakilala: '}
-          {answerWordCount}
+          {english ? 'Items completed: ' : 'Mga item sa round: '}
+          {summary.items.length}
         </Text>
         <Text style={styles.signalText}>
-          {english ? 'Answer recording: ' : 'Pag-record ng sagot: '}
+          {english ? 'Question-answer time: ' : 'Oras ng pagsagot: '}
           {formatTime(Math.round(answerDuration))}
-          {english ? ' · read-aloud ' : ' · pagbabasa '}
-          {formatTime(Math.round(passageDuration))}
+          {english ? ' · reading time: ' : ' · oras ng pagbasa: '}
+          {formatTime(Math.round(readingDuration))}
         </Text>
       </View>
 
@@ -582,7 +674,11 @@ function ResultsScreen({
         </Text>
         <Text style={styles.feedbackText}>{adaptiveHint}</Text>
         <Text style={styles.adaptiveNote}>
-          {english ? '3-exercise average' : 'Katamtaman ng 3 pagsasanay'}: {Math.round(rollingAverage)}
+          {scores
+            ? `${english ? 'Recent round vocabulary average' : 'Karaniwang bokabularyo sa mga round'}: ${Math.round(rollingAverage)}`
+            : english
+              ? 'Difficulty unchanged because no question answerKeywords were provided.'
+              : 'Hindi nagbago ang antas dahil walang answerKeywords sa mga tanong.'}
           {' · '}{english ? 'Next level' : 'Susunod na antas'}: {difficultyLabel(nextDifficulty)}
         </Text>
       </View>
@@ -590,7 +686,7 @@ function ResultsScreen({
       <View style={styles.nextRow}>
         <View />
         <PrimaryButton
-          title={english ? 'Try another story  →' : 'Bagong kuwento  →'}
+          title={english ? 'Start next round  →' : 'Simulan ang susunod na round  →'}
           onPress={onNext}
         />
       </View>
@@ -1099,6 +1195,9 @@ const styles = StyleSheet.create({
   recordingButton: {
     backgroundColor: '#E54C3A',
   },
+  recordButtonDisabled: {
+    opacity: 0.55,
+  },
   recordDot: {
     width: 20,
     height: 20,
@@ -1333,6 +1432,17 @@ const styles = StyleSheet.create({
   },
   interactionComponent: {
     gap: 5,
+  },
+  readAloudAverage: {
+    color: colors.purple,
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  roundResultItem: {
+    gap: 4,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.track,
   },
   criteriaCard: {
     padding: 14,
