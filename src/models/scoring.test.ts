@@ -4,6 +4,7 @@ import {
   computeReadAloudMatchScore,
   computeInteractionScore,
   computeVocabularyScore,
+  diagnosticPlacementForBand,
   updateDifficulty,
 } from './scoring';
 
@@ -219,10 +220,18 @@ test('scores empty input with no recognized topic words as zero range', () => {
   });
 });
 
-test('adapts across Pre-A1, A1, and A2 without promoting past A2', () => {
+test('maps diagnostic bands to their assigned follow-up levels', () => {
+  assert.equal(diagnosticPlacementForBand('Pre-A1'), 1);
+  assert.equal(diagnosticPlacementForBand('A1'), 2);
+  assert.equal(diagnosticPlacementForBand('A2'), 3);
+});
+
+test('adapts through levels 1 to 3 without promoting past A2', () => {
   assert.equal(updateDifficulty(0, [80, 90, 85]).next, 1);
+  assert.equal(updateDifficulty(1, [20]).next, 1);
   assert.equal(updateDifficulty(1, [80, 90]).next, 1);
   assert.equal(updateDifficulty(1, [80, 90, 85]).next, 2);
-  assert.equal(updateDifficulty(2, [80, 90, 85]).next, 2);
-  assert.equal(updateDifficulty(2, [70, 40, 35]).next, 1);
+  assert.equal(updateDifficulty(2, [80, 90, 85]).next, 3);
+  assert.equal(updateDifficulty(3, [80, 90, 85]).next, 3);
+  assert.equal(updateDifficulty(3, [70, 40, 35]).next, 2);
 });

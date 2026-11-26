@@ -89,6 +89,10 @@ function BiboApp() {
               isRecording={vm.isRecording}
               isRecognitionStopping={vm.isRecognitionStopping}
               isSpeaking={vm.isSpeaking}
+              roundNumber={vm.roundNumber}
+              currentDifficulty={vm.round?.difficulty ?? vm.difficulty}
+              currentLevelLabel={vm.localizedDifficulty(vm.round?.difficulty ?? vm.difficulty)}
+              isPlaceholder={vm.currentItem.content.is_placeholder === true}
               message={vm.message}
               onBack={vm.goHome}
               onToggleRecording={() => {
@@ -187,11 +191,14 @@ function HomeScreen({
         <View style={styles.levelInfo}>
           <Text style={styles.levelName}>{localizedLevelTitle(difficulty, language)}</Text>
           <Text style={styles.levelDescription}>
+            {english ? 'Current level: ' : 'Kasalukuyang antas: '}
             {difficultyLabels[difficulty][language]}
-            {english ? ' · Keep going!' : ' · Tuloy lang!'}
+            {difficulty === 0
+              ? english ? ' · Complete the diagnostic to get placed.' : ' · Tapusin ang diagnostic para maitakda ang antas.'
+              : english ? ' · Keep going!' : ' · Tuloy lang!'}
           </Text>
           <View style={styles.levelTrack}>
-            <View style={[styles.levelProgress, { width: `${((difficulty + 1) / 3) * 100}%` }]} />
+            <View style={[styles.levelProgress, { width: `${Math.max(8, (difficulty / 3) * 100)}%` }]} />
           </View>
         </View>
         <Text style={styles.levelStar}>⭐</Text>
@@ -256,6 +263,10 @@ function PracticeScreen({
   isRecording,
   isRecognitionStopping,
   isSpeaking,
+  roundNumber,
+  currentDifficulty,
+  currentLevelLabel,
+  isPlaceholder,
   message,
   onBack,
   onToggleRecording,
@@ -274,6 +285,10 @@ function PracticeScreen({
   isRecording: boolean;
   isRecognitionStopping: boolean;
   isSpeaking: boolean;
+  roundNumber: number;
+  currentDifficulty: Difficulty;
+  currentLevelLabel: string;
+  isPlaceholder: boolean;
   message: string;
   onBack: () => void;
   onToggleRecording: () => void;
@@ -296,7 +311,11 @@ function PracticeScreen({
         </Pressable>
         <View style={styles.headingCopy}>
           <Text style={styles.eyebrowSmall}>
-            {english ? 'SPEAKING ROUND' : 'ROUND NG PAGSASALITA'}
+            {currentDifficulty === 0
+              ? `DIAGNOSTIC · ROUND ${roundNumber}`
+              : english
+                ? `ROUND ${roundNumber} · LEVEL ${currentLevelLabel}`
+                : `ROUND ${roundNumber} · ANTAS ${currentLevelLabel}`}
           </Text>
           <Text style={styles.screenTitle}>
             {passagePart
@@ -389,6 +408,13 @@ function PracticeScreen({
             ? 'Answer in your own words. There is no single required answer.'
             : 'Sumagot gamit ang sarili mong mga salita. Walang iisang tamang sagot.'}
       </Text>
+      {isPlaceholder && (
+        <Text style={styles.hint}>
+          {english
+            ? 'Prototype placeholder: this content is not calibrated to this level yet.'
+            : 'Placeholder ito: hindi pa iniangkop ang nilalaman sa antas na ito.'}
+        </Text>
+      )}
       {recognitionUnavailable && (
         <Text style={styles.hint}>
           {english
@@ -460,7 +486,9 @@ function ResultsScreen({
   return (
     <View>
       <Text style={styles.eyebrow}>
-        {english ? `ROUND ${summary.roundNumber} COMPLETE 🗺️` : `TAPOS NA ANG ROUND ${summary.roundNumber} 🗺️`}
+        {summary.difficulty === 0
+          ? english ? 'DIAGNOSTIC COMPLETE 🗺️' : 'TAPOS NA ANG DIAGNOSTIC 🗺️'
+          : english ? `ROUND ${summary.roundNumber} COMPLETE 🗺️` : `TAPOS NA ANG ROUND ${summary.roundNumber} 🗺️`}
       </Text>
       <Text style={styles.resultsTitle}>{english ? 'Keep growing!' : 'Patuloy na umunlad!'}</Text>
 
@@ -468,7 +496,9 @@ function ResultsScreen({
         <Text style={styles.badgeEmoji}>🏆</Text>
         <View style={styles.badgeCopy}>
           <Text style={styles.promptLabel}>
-            {english ? 'ROUND VOCABULARY BAND' : 'ANTAS NG BOKABULARYO SA ROUND'}
+            {summary.difficulty === 0
+              ? english ? 'DIAGNOSTIC PLACEMENT' : 'ANTAS MULA SA DIAGNOSTIC'
+              : english ? 'ROUND VOCABULARY BAND' : 'ANTAS NG BOKABULARYO SA ROUND'}
           </Text>
           <Text style={styles.badgeName}>{bandDescription}</Text>
           <Text style={styles.badgeNote}>
@@ -675,7 +705,9 @@ function ResultsScreen({
         <Text style={styles.feedbackText}>{adaptiveHint}</Text>
         <Text style={styles.adaptiveNote}>
           {scores
-            ? `${english ? 'Recent round vocabulary average' : 'Karaniwang bokabularyo sa mga round'}: ${Math.round(rollingAverage)}`
+            ? `${summary.difficulty === 0
+              ? english ? 'Diagnostic vocabulary score' : 'Marka ng bokabularyo sa diagnostic'
+              : english ? 'Recent round vocabulary average' : 'Karaniwang bokabularyo sa mga round'}: ${Math.round(rollingAverage)}`
             : english
               ? 'Difficulty unchanged because no question answerKeywords were provided.'
               : 'Hindi nagbago ang antas dahil walang answerKeywords sa mga tanong.'}
@@ -696,9 +728,10 @@ function ResultsScreen({
 
 function localizedLevelTitle(level: Difficulty, language: Language): string {
   const titles = [
-    { en: 'Word Builder', fil: 'Tagabuo ng Salita' },
-    { en: 'Story Starter', fil: 'Panimula ng Kuwento' },
-    { en: 'Brave Speaker', fil: 'Matapang na Tagapagsalita' },
+    { en: 'Diagnostic Round', fil: 'Diagnostic' },
+    { en: 'Pre-A1 Starter', fil: 'Simula ng Pre-A1' },
+    { en: 'A1 Story Builder', fil: 'Tagabuo ng Kuwento A1' },
+    { en: 'A2 Challenge', fil: 'Hamon A2' },
   ];
   return titles[level][language];
 }

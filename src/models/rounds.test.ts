@@ -11,6 +11,7 @@ test('validates bilingual passage and open-ended question documents', () => {
   const passage = parseReadingPassage('passage_1', {
     active_status: true,
     difficulty: 0,
+    is_placeholder: true,
     title: { en: 'The Seed', fil: 'Ang Binhi' },
     passage: { en: 'A seed grows.', fil: 'Lumalaki ang binhi.' },
   });
@@ -22,8 +23,19 @@ test('validates bilingual passage and open-ended question documents', () => {
   });
 
   assert.equal(passage.passage.en, 'A seed grows.');
+  assert.equal(passage.is_placeholder, true);
   assert.equal(question.hints?.fil, 'Halaman o ibang ideya.');
   assert.equal(question.answerKeywords, undefined);
+});
+
+test('accepts A2 difficulty 3 for placeholder rounds', () => {
+  const template = parseRoundTemplate('a2-template', {
+    difficulty: 3,
+    passageIds: ['passage_1', 'passage_2', 'passage_3'],
+    questionIds: Array.from({ length: 7 }, (_, index) => `question_${index + 1}`),
+  });
+
+  assert.equal(template.difficulty, 3);
 });
 
 test('rejects round templates that do not contain three unique passages and seven questions', () => {
@@ -39,7 +51,7 @@ test('rejects round templates that do not contain three unique passages and seve
     () => parseRoundTemplate('duplicate-template', {
       difficulty: 1,
       passageIds: ['passage_1', 'passage_2', 'passage_3'],
-      questionIds: ['question_1', 'question_2', 'question_3', 'question_4', 'question_5', 'question_6', 'question_7'],
+      questionIds: ['question_1', 'question_2', 'question_3', 'question_4', 'question_5', 'question_6', 'question_6'],
     }),
     /seven unique question IDs/u,
   );

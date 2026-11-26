@@ -4,4 +4,4 @@ dist/
 android/
 ios/
 .env
-service-account.json
+editDatabase/

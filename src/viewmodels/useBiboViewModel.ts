@@ -16,6 +16,7 @@ import {
   computeInteractionScore,
   computeReadAloudMatchScore,
   computeVocabularyScore,
+  diagnosticPlacementForBand,
   updateDifficulty,
   type TargetLanguage,
 } from '../models/scoring';
@@ -317,7 +318,13 @@ export function useBiboViewModel() {
       updatedResults,
     );
     setRoundSummary(summary);
-    if (summary.vocabularyAverage) {
+    if (summary.vocabularyAverage && round.difficulty === 0) {
+      const placement = diagnosticPlacementForBand(summary.vocabularyAverage.band);
+      setRecentRoundScores([]);
+      setNextDifficulty(placement);
+      setRollingAverage(summary.vocabularyAverage.vocab_score * 100);
+      setDifficulty(placement);
+    } else if (summary.vocabularyAverage) {
       const updatedRoundScores = [
         ...recentRoundScores,
         summary.vocabularyAverage.vocab_score * 100,
@@ -360,19 +367,30 @@ export function useBiboViewModel() {
 
   const adaptiveHint = useMemo(() => {
     const completedDifficulty = roundSummary?.difficulty ?? difficulty;
+    if (roundSummary?.difficulty === 0) {
+      if (!roundSummary.vocabularyAverage) {
+        return language === 'en'
+          ? 'Diagnostic complete, but a level could not be assigned because no vocabulary score was available.'
+          : 'Tapos na ang diagnostic, pero walang maitakdang antas dahil walang marka sa bokabularyo.';
+      }
+      const placement = difficultyLabels[nextDifficulty][language];
+      return language === 'en'
+        ? `Your diagnostic places you at ${placement}. Your next round will use this level.`
+        : `Itinalaga ka ng diagnostic sa antas na ${placement}. Gagamitin ang antas na ito sa susunod na round.`;
+    }
     if (nextDifficulty > completedDifficulty) {
       return language === 'en'
-        ? 'Great work! Your next round will have a little more challenge.'
-        : 'Magaling! Mas magiging hamon nang kaunti ang susunod na round.';
+        ? `Your recent vocabulary results earned a level-up to ${difficultyLabels[nextDifficulty].en}.`
+        : `Umakyat ka sa antas na ${difficultyLabels[nextDifficulty].fil} dahil sa iyong mga resulta sa bokabularyo.`;
     }
     if (nextDifficulty < completedDifficulty) {
       return language === 'en'
-        ? 'Your next round will have extra help and a gentler pace.'
-        : 'Mas maraming gabay at mas banayad na bilis ang susunod na round.';
+        ? `Your next round moves to ${difficultyLabels[nextDifficulty].en} for more support.`
+        : `Lilipat sa ${difficultyLabels[nextDifficulty].fil} ang susunod na round para sa dagdag na gabay.`;
     }
     return language === 'en'
-      ? 'Keep practicing at your current round level.'
-      : 'Magpatuloy sa pagsasanay sa kasalukuyang antas.';
+      ? `Keep practicing at ${difficultyLabels[nextDifficulty].en}.`
+      : `Magpatuloy sa pagsasanay sa antas na ${difficultyLabels[nextDifficulty].fil}.`;
   }, [difficulty, language, nextDifficulty, roundSummary]);
 
   function goHome() {

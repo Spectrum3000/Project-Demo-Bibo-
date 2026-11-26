@@ -29,6 +29,17 @@ export type ReadAloudMatchScore = {
   status: 'scored' | 'blank' | 'unavailable' | 'no-reference';
 };
 
+export function diagnosticPlacementForBand(band: VocabularyBand): Difficulty {
+  switch (band) {
+    case 'Pre-A1':
+      return 1;
+    case 'A1':
+      return 2;
+    case 'A2':
+      return 3;
+  }
+}
+
 function tokenize(text: string): string[] {
   return text
     .toLocaleLowerCase()
@@ -231,10 +242,10 @@ export function updateDifficulty(
   const rollingAverage = recent.reduce((sum, score) => sum + score, 0) / recent.length;
   const masteredThree = recent.length === 3 && recent.every((score) => score >= 80);
 
-  if (masteredThree && current < 2) {
+  if (masteredThree && current < 3) {
     return { next: (current + 1) as Difficulty, rollingAverage };
   }
-  if (rollingAverage < 50 && current > 0) {
+  if (rollingAverage < 50 && current > 1) {
     return { next: (current - 1) as Difficulty, rollingAverage };
   }
   return { next: current, rollingAverage };

@@ -13,6 +13,7 @@ export type ReadingPassage = {
   id: string;
   active_status: true;
   difficulty: Difficulty;
+  is_placeholder?: boolean;
   title: LocalizedText;
   passage: LocalizedText;
 };
@@ -21,6 +22,7 @@ export type OpenEndedQuestion = {
   id: string;
   active_status: true;
   difficulty: Difficulty;
+  is_placeholder?: boolean;
   prompt: LocalizedText;
   hints?: LocalizedText;
   answerKeywords?: LocalizedKeywords;
@@ -72,8 +74,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseDifficulty(value: unknown, context: string): Difficulty {
-  if (value === 0 || value === 1 || value === 2) return value;
-  throw new Error(`${context} must have difficulty 0, 1, or 2.`);
+  if (value === 0 || value === 1 || value === 2 || value === 3) return value;
+  throw new Error(`${context} must have difficulty 0, 1, 2, or 3.`);
+}
+
+function parsePlaceholderFlag(value: unknown, context: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'boolean') {
+    throw new Error(`${context} is_placeholder must be a boolean.`);
+  }
+  return value;
 }
 
 function parseLocalizedText(value: unknown, context: string): LocalizedText {
@@ -122,6 +132,7 @@ export function parseReadingPassage(id: string, value: unknown): ReadingPassage 
     id,
     active_status: true,
     difficulty: parseDifficulty(value.difficulty, `Reading passage "${id}"`),
+    is_placeholder: parsePlaceholderFlag(value.is_placeholder, `Reading passage "${id}"`),
     title: parseLocalizedText(value.title, `Reading passage "${id}" title`),
     passage: parseLocalizedText(value.passage, `Reading passage "${id}" passage`),
   };
@@ -138,6 +149,7 @@ export function parseOpenEndedQuestion(
     id,
     active_status: true,
     difficulty: parseDifficulty(value.difficulty, `Open-ended question "${id}"`),
+    is_placeholder: parsePlaceholderFlag(value.is_placeholder, `Open-ended question "${id}"`),
     prompt: parseLocalizedText(value.prompt, `Open-ended question "${id}" prompt`),
     hints: parseOptionalLocalizedText(value.hints, `Open-ended question "${id}" hints`),
     answerKeywords: parseOptionalLocalizedKeywords(
